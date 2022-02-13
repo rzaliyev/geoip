@@ -12,11 +12,12 @@ import (
 	"os"
 )
 
+const defaultInputFilename = "data.csv"
+
 const (
-	defaultInputFilename            = "data.csv"
-	defaultInputIpAddressStartIndex = 0
-	defaultInputIpAddressEndIndex   = 1
-	defaultInputCountryIndex        = 2
+	defaultInputIpAddressStartIndex = iota
+	defaultInputIpAddressEndIndex
+	defaultInputCountryIndex
 )
 
 var (
@@ -32,14 +33,8 @@ type IPIntRange struct {
 	end   int64
 }
 
-type IPStringRange struct {
-	start string
-	end   string
-}
-
 type GeoIP struct {
-	ipToCountryCode       map[IPIntRange]string
-	countryCodeToIPRanges map[string][]IPStringRange
+	ipToCountryCode map[IPIntRange]string
 }
 
 func (g *GeoIP) Size() int {
@@ -70,7 +65,6 @@ func IP4toInt(IPv4Address net.IP) int64 {
 func NewGeoIP() *GeoIP {
 	geoIP := &GeoIP{}
 	geoIP.ipToCountryCode = make(map[IPIntRange]string)
-	geoIP.countryCodeToIPRanges = make(map[string][]IPStringRange)
 
 	// open file
 	f, err := os.Open(*geoDB)
@@ -95,18 +89,17 @@ func NewGeoIP() *GeoIP {
 
 		startIP := rec[*ipStartIndex]
 		endIP := rec[*ipEndIndex]
+		countryCode := rec[*countryIndex]
 
 		IPv4AddressStart := net.ParseIP(startIP).To4()
 		IPv4AddressEnd := net.ParseIP(endIP).To4()
 		if IPv4AddressStart == nil || IPv4AddressEnd == nil {
 			continue
 		}
-		countryCode := rec[*countryIndex]
-		strRange := IPStringRange{startIP, endIP}
+
 		intRange := IPIntRange{IP4toInt(IPv4AddressStart), IP4toInt(IPv4AddressEnd)}
 
 		geoIP.ipToCountryCode[intRange] = countryCode
-		geoIP.countryCodeToIPRanges[countryCode] = append(geoIP.countryCodeToIPRanges[countryCode], strRange)
 	}
 	return geoIP
 }
