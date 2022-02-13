@@ -13,13 +13,17 @@ import (
 	"strings"
 )
 
-const defaultInputFilename = "data.csv"
-const defaultInputIpAddressIndex = 0
-const defaultInputCountryIndex = 2
+const (
+	defaultInputFilename       = "data.csv"
+	defaultInputIpAddressIndex = 0
+	defaultInputCountryIndex   = 2
+)
 
-var geoDbFile = flag.String("geodb", defaultInputFilename, "file with geoip data")
-var convertFlag = flag.Bool("c", false, "convert csv file with ip addresses")
-var inputFile = flag.String("input", "", "file with ip addresses that needs to conver to countries")
+var (
+	geoDB        = flag.String("geodb", defaultInputFilename, "csv file with geoip data")
+	ipIndex      = flag.Int("ip", defaultInputIpAddressIndex, "ip address index in csv file (default 0)")
+	countryIndex = flag.Int("country", defaultInputCountryIndex, "country index in csv file")
+)
 
 func IP4toInt(IPv4Address net.IP) int64 {
 	IPv4Int := big.NewInt(0)
@@ -105,24 +109,6 @@ func main() {
 
 	flag.Parse()
 
-	ipIndex := defaultInputIpAddressIndex
-	countryIndex := defaultInputCountryIndex
-	filename := *geoDbFile
+	NewGeoIP(*geoDB, *ipIndex, *countryIndex)
 
-	GeoIP := NewGeoIP(filename, ipIndex, countryIndex)
-
-	if len(os.Args) > 1 {
-		//
-	} else {
-		cliLoop(GeoIP)
-	}
-
-	// for _, ip := range os.Args[1:] {
-	// 	IPv4Address := net.ParseIP(ip).To4()
-	// 	if IPv4Address == nil {
-	// 		fmt.Println("")
-	// 	} else {
-	// 		fmt.Println(GeoIP.FindCountry(IPv4Address))
-	// 	}
-	// }
 }
