@@ -24,6 +24,7 @@ var (
 	ipStartIndex = flag.Int("ipstart", defaultInputIpAddressStartIndex, "ip address start index in csv file (default 0)")
 	ipEndIndex   = flag.Int("ipend", defaultInputIpAddressEndIndex, "ip address end index in csv file")
 	countryIndex = flag.Int("country", defaultInputCountryIndex, "country index in csv file")
+	showDbSize   = flag.Bool("size", false, "show number of records in database")
 )
 
 type IPIntRange struct {
@@ -126,7 +127,11 @@ func main() {
 	flag.Parse()
 
 	geoip := NewGeoIP()
-	fmt.Println(geoip.Size())
+
+	if *showDbSize {
+		fmt.Println("Total number of records are", geoip.Size())
+		os.Exit(0)
+	}
 
 	var (
 		codes []string

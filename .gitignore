@@ -1,3 +1,4 @@
 geoip
 *.csv
+*.txt
 !test_data.csv
