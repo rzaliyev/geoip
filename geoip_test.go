@@ -1,6 +1,7 @@
 package main
 
 import (
+	"reflect"
 	"testing"
 )
 
@@ -44,7 +45,7 @@ func TestGeoIP(t *testing.T) {
 		for _, test := range cases {
 			want := test.country
 			got := geoip.FindCountryByIP(test.ip)
-			if got != want {
+			if !reflect.DeepEqual(got, want) {
 				t.Errorf("got %q, want %q", got, want)
 			}
 		}

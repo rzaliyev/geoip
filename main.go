@@ -12,12 +12,15 @@ import (
 	"os"
 )
 
+// TODO: if address is a subnet mask according to flag mask - find all range matches
+
 const defaultInputFilename = "data.csv"
 
 const (
 	defaultInputIpAddressStartIndex = iota
 	defaultInputIpAddressEndIndex
 	defaultInputCountryIndex
+	defaultSubnetMask = 32
 )
 
 var (
@@ -27,6 +30,7 @@ var (
 	countryIndex = flag.Int("country", defaultInputCountryIndex, "country index in csv file")
 	showDbSize   = flag.Bool("size", false, "show number of records in database")
 	checkDB      = flag.Bool("check", false, "check geoip for completeness")
+	ipMask       = flag.Int("mask", defaultSubnetMask, "subnet mask")
 )
 
 type IPRange struct {
@@ -54,19 +58,19 @@ func (g *GeoIP) IsComplete() bool {
 	return true
 }
 
-func (g *GeoIP) FindCountryByIP(ip string) string {
+func (g *GeoIP) FindCountryByIP(ip string) (cc []string) {
 	IPv4Address := net.ParseIP(ip).To4()
 	if IPv4Address == nil {
-		return ""
+		return
 	}
 
 	ipInt := IP4toInt(IPv4Address)
 	for _, ipRange := range g.ipToCountryCode {
 		if ipInt >= ipRange.start && ipInt <= ipRange.end {
-			return ipRange.cc
+			cc = append(cc, ipRange.cc)
 		}
 	}
-	return ""
+	return
 }
 
 func IP4toInt(IPv4Address net.IP) int64 {
@@ -116,7 +120,7 @@ func NewGeoIP() *GeoIP {
 	return geoIP
 }
 
-func findCountryCodes(geodb *GeoIP, f *os.File) (codes []string, err error) {
+func findCountryCodes(geodb *GeoIP, f *os.File) (codes [][]string, err error) {
 	input := bufio.NewScanner(f)
 	for input.Scan() {
 		codes = append(codes, geodb.FindCountryByIP(input.Text()))
@@ -127,11 +131,8 @@ func findCountryCodes(geodb *GeoIP, f *os.File) (codes []string, err error) {
 	return
 }
 
-func hanleFlags(geoip *GeoIP) {
-	flag.Parse()
-
+func handleFlags(geoip *GeoIP) {
 	var quit bool
-
 	if *showDbSize {
 		fmt.Println("Total number of records are", geoip.Size())
 		quit = true
@@ -140,23 +141,27 @@ func hanleFlags(geoip *GeoIP) {
 		fmt.Println("GeoIP database covers all IPv4 addresses:", geoip.IsComplete())
 		quit = true
 	}
-
+	if !(*ipMask > 0 && *ipMask <= 32) {
+		fmt.Println("Subnet mask shall be whitin 1 - 32 range")
+		quit = true
+	}
 	if quit {
 		os.Exit(0)
 	}
 }
 
 func main() {
-
 	geoip := NewGeoIP()
-	hanleFlags(geoip)
+
+	flag.Parse()
+	handleFlags(geoip)
 
 	var (
-		codes []string
+		codes [][]string
 		err   error
 	)
 
-	files := os.Args[1:]
+	files := flag.Args()
 	if len(files) == 0 {
 		codes, err = findCountryCodes(geoip, os.Stdin)
 	}
@@ -168,5 +173,4 @@ func main() {
 	for _, code := range codes {
 		fmt.Println(code)
 	}
-
 }
