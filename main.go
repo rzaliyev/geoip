@@ -26,19 +26,32 @@ var (
 	ipEndIndex   = flag.Int("ipend", defaultInputIpAddressEndIndex, "ip address end index in csv file")
 	countryIndex = flag.Int("country", defaultInputCountryIndex, "country index in csv file")
 	showDbSize   = flag.Bool("size", false, "show number of records in database")
+	checkDB      = flag.Bool("check", false, "check geoip for completeness")
 )
 
-type IPIntRange struct {
+type IPRange struct {
 	start int64
 	end   int64
+	cc    string
 }
 
 type GeoIP struct {
-	ipToCountryCode map[IPIntRange]string
+	ipToCountryCode []IPRange
 }
 
 func (g *GeoIP) Size() int {
 	return len(g.ipToCountryCode)
+}
+
+func (g *GeoIP) IsComplete() bool {
+	for i := 0; i < (len(g.ipToCountryCode) - 1); i++ {
+		currRange := g.ipToCountryCode[i]
+		nextRange := g.ipToCountryCode[i+1]
+		if (currRange.end + 1) != nextRange.start {
+			return false
+		}
+	}
+	return true
 }
 
 func (g *GeoIP) FindCountryByIP(ip string) string {
@@ -48,9 +61,9 @@ func (g *GeoIP) FindCountryByIP(ip string) string {
 	}
 
 	ipInt := IP4toInt(IPv4Address)
-	for ipRange, cc := range g.ipToCountryCode {
+	for _, ipRange := range g.ipToCountryCode {
 		if ipInt >= ipRange.start && ipInt <= ipRange.end {
-			return cc
+			return ipRange.cc
 		}
 	}
 	return ""
@@ -64,7 +77,6 @@ func IP4toInt(IPv4Address net.IP) int64 {
 
 func NewGeoIP() *GeoIP {
 	geoIP := &GeoIP{}
-	geoIP.ipToCountryCode = make(map[IPIntRange]string)
 
 	// open file
 	f, err := os.Open(*geoDB)
@@ -97,9 +109,9 @@ func NewGeoIP() *GeoIP {
 			continue
 		}
 
-		intRange := IPIntRange{IP4toInt(IPv4AddressStart), IP4toInt(IPv4AddressEnd)}
+		ipRange := IPRange{IP4toInt(IPv4AddressStart), IP4toInt(IPv4AddressEnd), countryCode}
 
-		geoIP.ipToCountryCode[intRange] = countryCode
+		geoIP.ipToCountryCode = append(geoIP.ipToCountryCode, ipRange)
 	}
 	return geoIP
 }
@@ -115,16 +127,29 @@ func findCountryCodes(geodb *GeoIP, f *os.File) (codes []string, err error) {
 	return
 }
 
-func main() {
-
+func hanleFlags(geoip *GeoIP) {
 	flag.Parse()
 
-	geoip := NewGeoIP()
+	var quit bool
 
 	if *showDbSize {
 		fmt.Println("Total number of records are", geoip.Size())
+		quit = true
+	}
+	if *checkDB {
+		fmt.Println("GeoIP database covers all IPv4 addresses:", geoip.IsComplete())
+		quit = true
+	}
+
+	if quit {
 		os.Exit(0)
 	}
+}
+
+func main() {
+
+	geoip := NewGeoIP()
+	hanleFlags(geoip)
 
 	var (
 		codes []string

@@ -5,6 +5,7 @@ import (
 )
 
 const testDBFile = "test_data.csv"
+const testDBFile2 = "test_data2.csv"
 
 func TestGeoIP(t *testing.T) {
 
@@ -47,5 +48,31 @@ func TestGeoIP(t *testing.T) {
 				t.Errorf("got %q, want %q", got, want)
 			}
 		}
+	})
+
+	t.Run("verify inclomplete database", func(t *testing.T) {
+		*geoDB = testDBFile
+		geoip := NewGeoIP()
+
+		want := false
+		got := geoip.IsComplete()
+
+		if got != want {
+			t.Errorf("got %v, want %v", got, want)
+		}
+
+	})
+
+	t.Run("verify clomplete database", func(t *testing.T) {
+		*geoDB = testDBFile2
+		geoip := NewGeoIP()
+
+		want := true
+		got := geoip.IsComplete()
+
+		if got != want {
+			t.Errorf("got %v, want %v", got, want)
+		}
+
 	})
 }
