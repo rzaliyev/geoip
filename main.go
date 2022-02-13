@@ -31,6 +31,7 @@ var (
 	showDbSize   = flag.Bool("size", false, "show number of records in database")
 	checkDB      = flag.Bool("check", false, "check geoip for completeness")
 	ipMask       = flag.Int("mask", defaultSubnetMask, "subnet mask")
+	wildcard     int
 )
 
 type IPRange struct {
@@ -58,16 +59,31 @@ func (g *GeoIP) IsComplete() bool {
 	return true
 }
 
-func (g *GeoIP) FindCountryByIP(ip string) (cc []string) {
+func (g *GeoIP) FindCountryByIP(ip string) (cc map[string]struct{}) {
 	IPv4Address := net.ParseIP(ip).To4()
 	if IPv4Address == nil {
 		return
 	}
+	cc = make(map[string]struct{})
+	mask := net.CIDRMask(*ipMask, 32)
+	isSubnet := IPv4Address.Equal(IPv4Address.Mask(mask))
 
 	ipInt := IP4toInt(IPv4Address)
-	for _, ipRange := range g.ipToCountryCode {
-		if ipInt >= ipRange.start && ipInt <= ipRange.end {
-			cc = append(cc, ipRange.cc)
+	if isSubnet {
+		for _, ipRange := range g.ipToCountryCode {
+			if ipInt>>int64(wildcard) >= ipRange.start>>int64(wildcard) && ipInt>>int64(wildcard) <= ipRange.end>>int64(wildcard) {
+				cc[ipRange.cc] = struct{}{}
+			} else if len(cc) > 0 {
+				return
+			}
+		}
+	} else {
+		for _, ipRange := range g.ipToCountryCode {
+			if ipInt >= ipRange.start && ipInt <= ipRange.end {
+				cc[ipRange.cc] = struct{}{}
+			} else if len(cc) > 0 {
+				return
+			}
 		}
 	}
 	return
@@ -80,6 +96,7 @@ func IP4toInt(IPv4Address net.IP) int64 {
 }
 
 func NewGeoIP() *GeoIP {
+	// TODO: Do not forget to sort ip ranges ascending
 	geoIP := &GeoIP{}
 
 	// open file
@@ -123,7 +140,12 @@ func NewGeoIP() *GeoIP {
 func findCountryCodes(geodb *GeoIP, f *os.File) (codes [][]string, err error) {
 	input := bufio.NewScanner(f)
 	for input.Scan() {
-		codes = append(codes, geodb.FindCountryByIP(input.Text()))
+		m := geodb.FindCountryByIP(input.Text())
+		var cc []string
+		for k, _ := range m {
+			cc = append(cc, k)
+		}
+		codes = append(codes, cc)
 	}
 	if input.Err() != nil {
 		return nil, input.Err()
@@ -145,6 +167,7 @@ func handleFlags(geoip *GeoIP) {
 		fmt.Println("Subnet mask shall be whitin 1 - 32 range")
 		quit = true
 	}
+	wildcard = defaultSubnetMask - *ipMask
 	if quit {
 		os.Exit(0)
 	}
