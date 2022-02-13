@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bufio"
 	"encoding/csv"
 	"flag"
+	"fmt"
 	"io"
 	"log"
 	"math/big"
@@ -22,12 +24,6 @@ var (
 	countryIndex = flag.Int("country", defaultInputCountryIndex, "country index in csv file")
 )
 
-func IP4toInt(IPv4Address net.IP) int64 {
-	IPv4Int := big.NewInt(0)
-	IPv4Int.SetBytes(IPv4Address)
-	return IPv4Int.Int64()
-}
-
 type GeoIP struct {
 	countries  []string
 	ipIntegers []int64
@@ -35,6 +31,31 @@ type GeoIP struct {
 
 func (g *GeoIP) Size() int {
 	return len(g.ipIntegers)
+}
+
+func (g *GeoIP) FindCountry(ip string) string {
+	IPv4Address := net.ParseIP(ip).To4()
+	if IPv4Address == nil {
+		return ""
+	}
+
+	decIP := IP4toInt(IPv4Address)
+	var prev int
+	for i, d := range g.ipIntegers {
+		if decIP == d {
+			return g.countries[i]
+		} else if decIP < d {
+			return g.countries[prev]
+		}
+		prev = i
+	}
+	return ""
+}
+
+func IP4toInt(IPv4Address net.IP) int64 {
+	IPv4Int := big.NewInt(0)
+	IPv4Int.SetBytes(IPv4Address)
+	return IPv4Int.Int64()
 }
 
 func NewGeoIP() *GeoIP {
@@ -72,47 +93,40 @@ func NewGeoIP() *GeoIP {
 	return geoIP
 }
 
-func (g *GeoIP) FindCountry(ip string) string {
-	IPv4Address := net.ParseIP(ip).To4()
-	if IPv4Address == nil {
-		return ""
+func findCountryCodes(geodb *GeoIP, f *os.File) (codes []string, err error) {
+	input := bufio.NewScanner(f)
+	for input.Scan() {
+		codes = append(codes, geodb.FindCountry(input.Text()))
 	}
-
-	decIP := IP4toInt(IPv4Address)
-	var prev int
-	for i, d := range g.ipIntegers {
-		if decIP == d {
-			return g.countries[i]
-		} else if decIP < d {
-			return g.countries[prev]
-		}
-		prev = i
+	if input.Err() != nil {
+		return nil, input.Err()
 	}
-	return ""
+	return
 }
-
-// func cliLoop(geoIP *GeoIP) {
-// 	for {
-// 		reader := bufio.NewReader(os.Stdin)
-// 		fmt.Print("Enter IPv4 address: ")
-// 		ipn, _ := reader.ReadString('\n')
-
-// 		ip := strings.Split(ipn, "\n")[0]
-
-// 		IPv4Address := net.ParseIP(ip).To4()
-// 		if IPv4Address == nil {
-// 			fmt.Println("It is not an IPv4 address. Try again.")
-// 			continue
-// 		}
-
-// 		fmt.Printf("IP address country: %q\n", geoIP.FindCountry(IPv4Address))
-// 	}
-// }
 
 func main() {
 
 	flag.Parse()
 
-	NewGeoIP()
+	geoip := NewGeoIP()
+	fmt.Println(geoip.Size())
+
+	var (
+		codes []string
+		err   error
+	)
+
+	files := os.Args[1:]
+	if len(files) == 0 {
+		codes, err = findCountryCodes(geoip, os.Stdin)
+	}
+
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	for _, code := range codes {
+		fmt.Println(code)
+	}
 
 }
