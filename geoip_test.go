@@ -12,7 +12,7 @@ func TestGeoIP(t *testing.T) {
 		*geoDB = testDBFile
 		geoip := NewGeoIP()
 
-		want := 10
+		want := 20
 		got := geoip.Size()
 
 		if got != want {
@@ -33,11 +33,16 @@ func TestGeoIP(t *testing.T) {
 			{"1.0.1.0", "CN"},
 			{"1.0.25.20", "JP"},
 			{"1.0.200.1", "TH"},
+			{"10.15.200.17", "ZZ"},
+			{"87.242.127.255", "RU"},
+			{"127.0.0.1", "ZZ"},
+			{"223.255.255.35", "AU"},
+			{"255.255.255.255", "ZZ"},
 		}
 
 		for _, test := range cases {
 			want := test.country
-			got := geoip.FindCountry(test.ip)
+			got := geoip.FindCountryByIP(test.ip)
 			if got != want {
 				t.Errorf("got %q, want %q", got, want)
 			}

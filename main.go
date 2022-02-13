@@ -13,41 +13,49 @@ import (
 )
 
 const (
-	defaultInputFilename       = "data.csv"
-	defaultInputIpAddressIndex = 0
-	defaultInputCountryIndex   = 2
+	defaultInputFilename            = "data.csv"
+	defaultInputIpAddressStartIndex = 0
+	defaultInputIpAddressEndIndex   = 1
+	defaultInputCountryIndex        = 2
 )
 
 var (
 	geoDB        = flag.String("geodb", defaultInputFilename, "csv file with geoip data")
-	ipIndex      = flag.Int("ip", defaultInputIpAddressIndex, "ip address index in csv file (default 0)")
+	ipStartIndex = flag.Int("ipstart", defaultInputIpAddressStartIndex, "ip address start index in csv file (default 0)")
+	ipEndIndex   = flag.Int("ipend", defaultInputIpAddressEndIndex, "ip address end index in csv file")
 	countryIndex = flag.Int("country", defaultInputCountryIndex, "country index in csv file")
 )
 
+type IPIntRange struct {
+	start int64
+	end   int64
+}
+
+type IPStringRange struct {
+	start string
+	end   string
+}
+
 type GeoIP struct {
-	countries  []string
-	ipIntegers []int64
+	ipToCountryCode       map[IPIntRange]string
+	countryCodeToIPRanges map[string][]IPStringRange
 }
 
 func (g *GeoIP) Size() int {
-	return len(g.ipIntegers)
+	return len(g.ipToCountryCode)
 }
 
-func (g *GeoIP) FindCountry(ip string) string {
+func (g *GeoIP) FindCountryByIP(ip string) string {
 	IPv4Address := net.ParseIP(ip).To4()
 	if IPv4Address == nil {
 		return ""
 	}
 
-	decIP := IP4toInt(IPv4Address)
-	var prev int
-	for i, d := range g.ipIntegers {
-		if decIP == d {
-			return g.countries[i]
-		} else if decIP < d {
-			return g.countries[prev]
+	ipInt := IP4toInt(IPv4Address)
+	for ipRange, cc := range g.ipToCountryCode {
+		if ipInt >= ipRange.start && ipInt <= ipRange.end {
+			return cc
 		}
-		prev = i
 	}
 	return ""
 }
@@ -60,6 +68,8 @@ func IP4toInt(IPv4Address net.IP) int64 {
 
 func NewGeoIP() *GeoIP {
 	geoIP := &GeoIP{}
+	geoIP.ipToCountryCode = make(map[IPIntRange]string)
+	geoIP.countryCodeToIPRanges = make(map[string][]IPStringRange)
 
 	// open file
 	f, err := os.Open(*geoDB)
@@ -82,13 +92,20 @@ func NewGeoIP() *GeoIP {
 			log.Fatal(err)
 		}
 
-		IPv4Address := net.ParseIP(rec[*ipIndex]).To4()
-		if IPv4Address == nil {
+		startIP := rec[*ipStartIndex]
+		endIP := rec[*ipEndIndex]
+
+		IPv4AddressStart := net.ParseIP(startIP).To4()
+		IPv4AddressEnd := net.ParseIP(endIP).To4()
+		if IPv4AddressStart == nil || IPv4AddressEnd == nil {
 			continue
 		}
+		countryCode := rec[*countryIndex]
+		strRange := IPStringRange{startIP, endIP}
+		intRange := IPIntRange{IP4toInt(IPv4AddressStart), IP4toInt(IPv4AddressEnd)}
 
-		geoIP.countries = append(geoIP.countries, rec[*countryIndex])
-		geoIP.ipIntegers = append(geoIP.ipIntegers, IP4toInt(IPv4Address))
+		geoIP.ipToCountryCode[intRange] = countryCode
+		geoIP.countryCodeToIPRanges[countryCode] = append(geoIP.countryCodeToIPRanges[countryCode], strRange)
 	}
 	return geoIP
 }
@@ -96,7 +113,7 @@ func NewGeoIP() *GeoIP {
 func findCountryCodes(geodb *GeoIP, f *os.File) (codes []string, err error) {
 	input := bufio.NewScanner(f)
 	for input.Scan() {
-		codes = append(codes, geodb.FindCountry(input.Text()))
+		codes = append(codes, geodb.FindCountryByIP(input.Text()))
 	}
 	if input.Err() != nil {
 		return nil, input.Err()
