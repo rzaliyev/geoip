@@ -1,3 +1,5 @@
+// geoip: utility for finding ISO 3166 country code using csv input database
+// By default, it is configured to use db-ip.com IP to Country Lite database in csv format
 package main
 
 import (
@@ -65,27 +67,23 @@ func (g *GeoIP) FindCountryByIP(ip string) (cc map[string]struct{}) {
 		return
 	}
 	cc = make(map[string]struct{})
-	mask := net.CIDRMask(*ipMask, 32)
+	mask := net.CIDRMask(*ipMask, defaultSubnetMask)
 	isSubnet := IPv4Address.Equal(IPv4Address.Mask(mask))
 
+	offset := 0
+	if *ipMask != defaultSubnetMask && isSubnet {
+		offset = wildcard
+	}
+
 	ipInt := IP4toInt(IPv4Address)
-	if isSubnet {
-		for _, ipRange := range g.ipToCountryCode {
-			if ipInt>>int64(wildcard) >= ipRange.start>>int64(wildcard) && ipInt>>int64(wildcard) <= ipRange.end>>int64(wildcard) {
-				cc[ipRange.cc] = struct{}{}
-			} else if len(cc) > 0 {
-				return
-			}
-		}
-	} else {
-		for _, ipRange := range g.ipToCountryCode {
-			if ipInt >= ipRange.start && ipInt <= ipRange.end {
-				cc[ipRange.cc] = struct{}{}
-			} else if len(cc) > 0 {
-				return
-			}
+	for _, ipRange := range g.ipToCountryCode {
+		if ipInt>>int64(offset) >= ipRange.start>>int64(offset) && ipInt>>int64(offset) <= ipRange.end>>int64(offset) {
+			cc[ipRange.cc] = struct{}{}
+		} else if len(cc) > 0 {
+			return
 		}
 	}
+
 	return
 }
 
@@ -140,10 +138,10 @@ func NewGeoIP() *GeoIP {
 func findCountryCodes(geodb *GeoIP, f *os.File) (codes [][]string, err error) {
 	input := bufio.NewScanner(f)
 	for input.Scan() {
-		m := geodb.FindCountryByIP(input.Text())
+		countryCodes := geodb.FindCountryByIP(input.Text())
 		var cc []string
-		for k, _ := range m {
-			cc = append(cc, k)
+		for code := range countryCodes {
+			cc = append(cc, code)
 		}
 		codes = append(codes, cc)
 	}
@@ -194,6 +192,16 @@ func main() {
 	}
 
 	for _, code := range codes {
-		fmt.Println(code)
+		printCodes(code)
 	}
+}
+
+func printCodes(codes []string) {
+	for i, v := range codes {
+		if i > 0 {
+			fmt.Print(", ")
+		}
+		fmt.Print(v)
+	}
+	fmt.Println()
 }

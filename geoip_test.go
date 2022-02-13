@@ -28,18 +28,43 @@ func TestGeoIP(t *testing.T) {
 
 		cases := []struct {
 			ip      string
-			country []string
+			country map[string]struct{}
 		}{
-			{"0.0.10.10", []string{"ZZ"}},
-			{"1.0.0.200", []string{"AU"}},
-			{"1.0.1.0", []string{"CN"}},
-			{"1.0.25.20", []string{"JP"}},
-			{"1.0.200.1", []string{"TH"}},
-			{"10.15.200.17", []string{"ZZ"}},
-			{"87.242.127.255", []string{"RU"}},
-			{"127.0.0.1", []string{"ZZ"}},
-			{"223.255.255.35", []string{"AU"}},
-			{"255.255.255.255", []string{"ZZ"}},
+			{"0.0.10.10", map[string]struct{}{"ZZ": {}}},
+			{"1.0.0.200", map[string]struct{}{"AU": {}}},
+			{"1.0.1.0", map[string]struct{}{"CN": {}}},
+			{"1.0.25.20", map[string]struct{}{"JP": {}}},
+			{"1.0.200.1", map[string]struct{}{"TH": {}}},
+			{"10.15.200.17", map[string]struct{}{"ZZ": {}}},
+			{"87.242.127.255", map[string]struct{}{"RU": {}}},
+			{"127.0.0.1", map[string]struct{}{"ZZ": {}}},
+			{"223.255.255.35", map[string]struct{}{"AU": {}}},
+			{"255.255.255.255", map[string]struct{}{"ZZ": {}}},
+		}
+
+		for _, test := range cases {
+			want := test.country
+			got := geoip.FindCountryByIP(test.ip)
+			if !reflect.DeepEqual(got, want) {
+				t.Errorf("got %q, want %q", got, want)
+			}
+		}
+	})
+
+	t.Run("successful find countries by ip subnet", func(t *testing.T) {
+		*geoDB = testDBFile2
+		*ipMask = 24
+		wildcard = defaultSubnetMask - *ipMask
+		geoip := NewGeoIP()
+
+		cases := []struct {
+			ip      string
+			country map[string]struct{}
+		}{
+			{"0.0.0.0", map[string]struct{}{"ZZ": {}, "RU": {}, "UA": {}, "KZ": {}}},
+			{"0.0.2.0", map[string]struct{}{"GB": {}, "US": {}}},
+			{"0.0.2.200", map[string]struct{}{"US": {}}},
+			{"0.0.3.0", map[string]struct{}{"FR": {}}},
 		}
 
 		for _, test := range cases {
@@ -64,7 +89,7 @@ func TestGeoIP(t *testing.T) {
 
 	})
 
-	t.Run("verify clomplete database", func(t *testing.T) {
+	t.Run("verify complete database", func(t *testing.T) {
 		*geoDB = testDBFile2
 		geoip := NewGeoIP()
 
